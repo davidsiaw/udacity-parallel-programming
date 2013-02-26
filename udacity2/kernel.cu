@@ -106,6 +106,8 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
+#define BLOCKSIZE 16
+
 __constant__ float filter[9*9] = {0};
 
 __global__
@@ -129,9 +131,50 @@ void gaussian_blur(const uchar4* const inputChannel,
          //   outputChannel[thread_1D_pos] = inputChannel[thread_1D_pos];
     
     // return;
-    if ( thread_2D_pos.x >= numCols || thread_2D_pos.y >= numRows ) { return; }
     
     const int half = filterWidth/2;
+    
+    if ( thread_2D_pos.x < half ||
+        thread_2D_pos.y < half || 
+        thread_2D_pos.x >= numCols-half || 
+        thread_2D_pos.y >= numRows-half ) {
+        
+        if ( thread_2D_pos.x >= numCols || thread_2D_pos.y >= numRows ) { return; }
+        
+        const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
+           
+        float4 total = make_float4(0,0,0,0);
+        
+        for (int fx = 0; fx < filterWidth; fx++) {
+            for (int fy = 0; fy < filterWidth; fy++) {
+                
+              int imgx = thread_2D_pos.x + fx - half;
+              int imgy = thread_2D_pos.y + fy - half;
+                
+              if ( imgx < 0 )          { imgx = 0; }
+              if ( imgy < 0 )          { imgy = 0; }
+              if ( imgx >= numCols )   { imgx = numCols-1; }
+              if ( imgy >= numRows )   { imgy = numRows-1; }
+                
+              const int thread_1D_pos = imgy * numCols + imgx;
+                
+              uchar4 value = inputChannel[thread_1D_pos];
+                
+              const int filterPos = (fy) * filterWidth + fx;
+                          
+              total.x += value.x * filter[filterPos];
+              total.y += value.y * filter[filterPos];
+              total.z += value.z * filter[filterPos];
+                
+            }
+        }
+        
+        outputChannel[thread_1D_pos0] = make_uchar4(total.x, total.y, total.z, 0);
+        
+        
+        return;
+    }
+    
     
     const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
        
@@ -143,10 +186,6 @@ void gaussian_blur(const uchar4* const inputChannel,
           int imgx = thread_2D_pos.x + fx - half;
           int imgy = thread_2D_pos.y + fy - half;
             
-          if ( imgx < 0 )          { imgx = 0; }
-          if ( imgy < 0 )          { imgy = 0; }
-          if ( imgx >= numCols )   { imgx = numCols-1; }
-          if ( imgy >= numRows )   { imgy = numRows-1; }
             
           const int thread_1D_pos = imgy * numCols + imgx;
             
@@ -276,15 +315,14 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
     printf("%d %d\n",f,t);
     */
     
-  const int mul = 32;
     
   //TODO: Set reasonable block size (i.e., number of threads per block)
-  const dim3 blockSize(mul,mul,1);
+  const dim3 blockSize(BLOCKSIZE,BLOCKSIZE,1);
 
   //TODO:
   //Compute correct grid size (i.e., number of blocks per kernel launch)
   //from the image size and and block size.
-  const dim3 gridSize(numCols/mul + 1,numRows/mul + 1,1);
+  const dim3 gridSize(numCols/BLOCKSIZE + 1,numRows/BLOCKSIZE + 1,1);
     
   //TODO: Launch a kernel for separating the RGBA image into different color channels
     
@@ -298,7 +336,7 @@ separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA,
  
   // Call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
-  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+  //cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   //TODO: Call your convolution kernel here 3 times, once for each color channel.
   gaussian_blur<<<gridSize, blockSize>>>(d_inputImageRGBA, d_outputImageRGBA, numRows, numCols, filterWidth);
@@ -319,7 +357,7 @@ separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA,
                                              numRows,
                                              numCols);
     */
-  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+  //cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 }
 
 
