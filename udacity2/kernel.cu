@@ -134,19 +134,18 @@ void gaussian_blur(const uchar4* const inputChannel,
     
     const int half = filterWidth/2;
     
+    float4 total = make_float4(0,0,0,0);
+    const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
+    
     if ( thread_2D_pos.x < half ||
         thread_2D_pos.y < half || 
         thread_2D_pos.x >= numCols-half || 
         thread_2D_pos.y >= numRows-half ) {
         
-        if ( thread_2D_pos.x >= numCols || thread_2D_pos.y >= numRows ) { return; }
+        if ( thread_2D_pos.x >= numCols || thread_2D_pos.y >= numRows ) { return; }           
         
-        const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
-           
-        float4 total = make_float4(0,0,0,0);
-        
-        for (int fx = 0; fx < filterWidth; fx++) {
-            for (int fy = 0; fy < filterWidth; fy++) {
+        for (int fy = 0; fy < filterWidth; fy++) {
+            for (int fx = 0; fx < filterWidth; fx++) {
                 
               int imgx = thread_2D_pos.x + fx - half;
               int imgy = thread_2D_pos.y + fy - half;
@@ -171,21 +170,15 @@ void gaussian_blur(const uchar4* const inputChannel,
         
         outputChannel[thread_1D_pos0] = make_uchar4(total.x, total.y, total.z, 0);
         
-        
         return;
     }
     
-    
-    const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
-       
-    float4 total = make_float4(0,0,0,0);
-    
-    for (int fx = 0; fx < filterWidth; fx++) {
-        for (int fy = 0; fy < filterWidth; fy++) {
+    for (int fy = 0; fy < filterWidth; fy++) {
+        
+        for (int fx = 0; fx < filterWidth; fx++) {
             
           int imgx = thread_2D_pos.x + fx - half;
           int imgy = thread_2D_pos.y + fy - half;
-            
             
           const int thread_1D_pos = imgy * numCols + imgx;
             
