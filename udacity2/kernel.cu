@@ -107,8 +107,8 @@
 #include <cuda_runtime_api.h>
 
 __global__
-void gaussian_blur(const unsigned char* const inputChannel,
-                   unsigned char* const outputChannel,
+void gaussian_blur(const uchar4* const inputChannel,
+                   uchar4* const outputChannel,
                    int numRows, int numCols,
                    const float* const filter, const int filterWidth)
 {
@@ -134,7 +134,8 @@ void gaussian_blur(const unsigned char* const inputChannel,
     
     const int thread_1D_pos0 = thread_2D_pos.y * numCols + thread_2D_pos.x;
        
-    float total = 0;
+    float4 total = make_float4(0,0,0,0);
+    
     for (int fx = -half; fx <= half; fx++) {
         for (int fy = -half; fy <= half; fy++) {
             
@@ -148,13 +149,16 @@ void gaussian_blur(const unsigned char* const inputChannel,
             
           const int thread_1D_pos = imgy * numCols + imgx;
             
-          float value = inputChannel[thread_1D_pos];
+          uchar4 value = inputChannel[thread_1D_pos];
           
-          total += value * filter[(fy + half) * filterWidth + fx + half];
+          total.x += value.x * filter[(fy + half) * filterWidth + fx + half];
+          total.y += value.y * filter[(fy + half) * filterWidth + fx + half];
+          total.z += value.z * filter[(fy + half) * filterWidth + fx + half];
+            
         }
     }
     
-    outputChannel[thread_1D_pos0] = total;
+    outputChannel[thread_1D_pos0] = make_uchar4(total.x, total.y, total.z, 0);
 
   // NOTE: If a thread's absolute position 2D position is within the image, but some of
   // its neighbors are outside the image, then you will need to be extra careful. Instead
@@ -268,7 +272,7 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
     printf("%d %d\n",f,t);
     */
     
-  const int mul = 16;
+  const int mul = 32;
     
   //TODO: Set reasonable block size (i.e., number of threads per block)
   const dim3 blockSize(mul,mul,1);
@@ -279,21 +283,21 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
   const dim3 gridSize(numCols/mul + 1,numRows/mul + 1,1);
     
   //TODO: Launch a kernel for separating the RGBA image into different color channels
+    
+    /*
 separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA,
                       numRows,
                       numCols,
                       d_red,
                       d_green,
-                      d_blue);
+                      d_blue);*/
  
   // Call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   //TODO: Call your convolution kernel here 3 times, once for each color channel.
-  gaussian_blur<<<gridSize, blockSize>>>(d_red, d_redBlurred, numRows, numCols, d_filter, filterWidth);
-  gaussian_blur<<<gridSize, blockSize>>>(d_green, d_greenBlurred, numRows, numCols, d_filter, filterWidth);
-  gaussian_blur<<<gridSize, blockSize>>>(d_blue, d_blueBlurred, numRows, numCols, d_filter, filterWidth);
+  gaussian_blur<<<gridSize, blockSize>>>(d_inputImageRGBA, d_outputImageRGBA, numRows, numCols, d_filter, filterWidth);
     
   // Again, call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
@@ -303,12 +307,14 @@ separateChannels<<<gridSize, blockSize>>>(d_inputImageRGBA,
   //
   // NOTE: This kernel launch depends on the gridSize and blockSize variables,
   // which you must set yourself.
+    /*
   recombineChannels<<<gridSize, blockSize>>>(d_redBlurred,
                                              d_greenBlurred,
                                              d_blueBlurred,
                                              d_outputImageRGBA,
                                              numRows,
                                              numCols);
+    */
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 }
 
